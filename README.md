@@ -1,5 +1,8 @@
 # Control
 
+**⚠️ In Development**  
+This project is actively being worked on and is not yet considered stable or production‑ready.
+
 Control is a Windows desktop application written in Rust that interfaces with a defense system over USB.  
 The project was developed as part of a university group assignment and demonstrates user authentication,
 real‑time sensor monitoring, and command transmission to the hardware.
