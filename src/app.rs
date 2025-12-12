@@ -1,34 +1,33 @@
-use chrono::{TimeDelta, Utc};
-use eframe::egui::{self};
-
 use crate::{
     auth,
     data::{AppState, AuthLevel, SessionData},
-    widgets::{boolean_control::BooleanControl, boolean_indicator::BooleanIndicator},
+    widgets::boolean_indicator::BooleanIndicator,
 };
+use chrono::{TimeDelta, Utc};
+use eframe::egui::PopupCloseBehavior::CloseOnClickOutside;
+use eframe::egui::{self};
 
 pub fn render(data: &mut AppState, ui: &mut egui::Ui) {
     ui.heading("Анти-(Анти-Автомат) System");
+    
+    let response = ui.button("Auth");
+    
+    egui::Popup::menu(&response)
+        .close_behavior(CloseOnClickOutside)
+        .width(220.0)
+        .show(|ui| {
+            if let Some(session) = data.current_session.as_mut() {
+                render_session(session, ui);
 
-    ui.collapsing("Modify", |ui| {
-        if data.current_session.is_some() {
-            let session = data
-                .current_session
-                .as_mut()
-                .expect("Condition checked above");
-
-            render_session(session, ui);
-
-            if session.auth_level == AuthLevel::View {
-                data.current_session = None;
-                data.enable_editing.set(data.current_session.is_some());
+                if session.auth_level == AuthLevel::View {
+                    data.current_session = None;
+                    data.enable_editing
+                        .set(data.current_session.is_some());
+                }
+            } else {
+                render_login(data, ui);
             }
-
-            return;
-        }
-
-        render_login(data, ui);
-    });
+        });
 
     render_data(data, ui);
 }
@@ -37,17 +36,19 @@ fn render_data(data: &mut AppState, ui: &mut egui::Ui) {
     ui.group(|ui| {
         ui.label("General:");
 
-        ui.add(BooleanControl {
-            label: "Alarm state:  ".to_owned(),
-            value_ref: &mut data.sensor_data.is_alarm_enabled,
-            on_change: |value| {
-                println!("Changing to: {value} !");
-                let mut port = data.api.port.lock().expect("Port mutex is poisoned");
+        if data.current_session.is_some() {
+            if ui.button("Poll").clicked() {
+                data.api.send_poll();
+            }
 
-                let command = if value { &[0xA5] } else { &[0x55] };
-                port.write(command).expect("Failed to send reset request");
-            },
-        });
+            if ui.button("Reset").clicked() {
+                data.api.send_reset();
+            }
+
+            if ui.button("Alarm!!!!!!").clicked() {
+                data.api.send_activate_alarm();
+            }
+        }
 
         ui.add(BooleanIndicator {
             label: "Is On Battery:".to_owned(),
@@ -75,7 +76,10 @@ fn render_login(data: &mut AppState, ui: &mut egui::Ui) {
     });
 
     if ui.button("Login").clicked() {
-        if auth::is_valid(data.input_username.as_str(), data.input_password.as_str()) {
+        if auth::is_valid(
+            data.input_username.as_str(),
+            data.input_password.as_str(),
+        ) {
             data.input_password = "".to_owned();
             data.current_session = Some(SessionData {
                 username: data.input_username.to_owned(),
@@ -88,7 +92,8 @@ fn render_login(data: &mut AppState, ui: &mut egui::Ui) {
                 },
             });
 
-            data.enable_editing.set(data.current_session.is_some());
+            data.enable_editing
+                .set(data.current_session.is_some());
         }
     }
 }
@@ -118,7 +123,9 @@ fn display_session_header(
     let username = session.username.clone();
     ui.label(format!("Logged in as [{username}]"));
 
-    let begin_ts = session.begin_timestamp.format("%Y-%m-%d %H:%M:%S");
+    let begin_ts = session
+        .begin_timestamp
+        .format("%Y-%m-%d %H:%M:%S");
     ui.label(format!("Session start: [{begin_ts}]"));
 
     let remaining_time = session_end_time - Utc::now();

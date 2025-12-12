@@ -1,122 +1,133 @@
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
-
-use crate::fluent::containers::*;
-
-use serialport::SerialPort;
+﻿use crate::authorized::serial_connection::SerialConnection;
+use eframe::egui;
+use eframe::egui::{Color32, Response, Ui, Widget};
 
 #[derive(Debug)]
-pub struct ControllerPoller {
-    pub port: Arc<Mutex<Box<dyn SerialPort>>>,
-    poll_thread_context: Arc<Mutex<PollThreadState>>,
+pub struct Api {
+    active_connection: Option<SerialConnection>,
 }
 
-#[derive(Debug)]
-pub struct PollThreadState {
-    pub keep_alive: bool,
-    pub state: ControllerState,
+impl Api {
+    pub fn exists(&self) -> bool {
+        self.active_connection.is_some()
+    }
 }
 
-#[derive(Debug)]
-pub struct ControllerState {
-    pub alarm_enabled: bool,
-}
+impl Api {
+    pub fn send_poll(&self) {
+        if let Some(active_connection) = &self.active_connection {
+            match active_connection.send_poll() {
+                Ok(res) => {
+                    println!("Res: {res:?}");
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                }
+            }
+        }
+    }
 
-impl Drop for ControllerPoller {
-    fn drop(&mut self) {
-        self.poll_thread_context.clear_poison();
+    pub fn send_reset(&self) {
+        if let Some(active_connection) = &self.active_connection {
+            match active_connection.send_reset() {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("{}", e);
+                }
+            }
+        }
+    }
 
-        match self.poll_thread_context.lock() {
-            Ok(mut value) => value.keep_alive = false,
-            Err(mut e) => e.get_mut().keep_alive = false,
+    pub fn send_activate_alarm(&self) {
+        if let Some(active_connection) = &self.active_connection {
+            match active_connection.send_activate_alarm() {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("{}", e);
+                }
+            }
         }
     }
 }
 
-impl ControllerPoller {
-    pub fn new() -> serialport::Result<Self> {
-        let mut selected_port_name = "".to_owned();
-        for available_port in serialport::available_ports().unwrap().iter() {
-            println!("Available port: {}", available_port.port_name);
-            selected_port_name = available_port.port_name.to_owned();
+impl Api {
+    pub fn new() -> Self {
+        Self { active_connection: None }
+    }
+
+    pub fn widget(&mut self) -> impl Widget {
+        ApiWidget { api: self }
+    }
+}
+
+#[derive(Debug)]
+pub struct ApiWidget<'a> {
+    api: &'a mut Api,
+}
+
+impl Widget for ApiWidget<'_> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let connection = match &mut self.api.active_connection {
+            Some(c) => c,
+            None => {
+                self.connection_picker(ui);
+                return ui.colored_label(Color32::RED, "No connection!");
+            }
+        };
+
+        ui.add(connection.widget());
+        if ui.button("Disconnect").clicked() {
+            self.api.active_connection = None;
         }
 
-        println!("connecting to: {}", selected_port_name);
-        let connection = serialport::new(selected_port_name.to_owned(), 9600)
-            .timeout(Duration::from_millis(1000))
-            .flow_control(serialport::FlowControl::None)
-            .data_bits(serialport::DataBits::Eight)
-            .stop_bits(serialport::StopBits::One)
-            .parity(serialport::Parity::None)
-            .open();
+        ui.response()
+    }
+}
 
-        if let Err(connection_error) = connection {
-            eprintln!(
-                "Connection to port: {} failed. Reason: {}",
-                selected_port_name.to_owned(),
-                connection_error
-            );
+impl ApiWidget<'_> {
+    fn connection_picker(self, ui: &mut Ui) -> Response {
+        egui::CollapsingHeader::new("Select connection")
+            .show(ui, |ui| {
+                ui.label("Connect to port:");
 
-            return Err(connection_error);
-        }
+                let ports = match serialport::available_ports() {
+                    Ok(p) => p,
+                    Err(err) => {
+                        return ui.colored_label(
+                            Color32::RED,
+                            format!("Failed to get ports: {}", err),
+                        );
+                    }
+                };
 
-        let connection = connection.unwrap().in_mutex().in_arc();
-        let controller_state = PollThreadState {
-            keep_alive: true,
-            state: ControllerState {
-                alarm_enabled: true,
-            },
-        }
-        .in_mutex()
-        .in_arc();
-
-        let poll_thread_controller_state = controller_state.clone();
-        let poll_thread_connection = connection.clone();
-        std::thread::spawn(move || {
-            println!("Starting poll thread.");
-
-            loop {
-                let mut connection = poll_thread_connection
-                    .lock()
-                    .expect("Poisoned connection mutex.");
-
-                println!("Sending code [0xAA]...");
-                connection
-                    .write_all(&[0xAA])
-                    .expect("Failed to write to port!");
-                connection.flush().expect("Failed to send data");
-
-                let mut receieved = [0u8; 8];
-                connection
-                    .read(&mut receieved)
-                    .expect("Failed to read from port!");
-
-                println!("Received: {:#?}", receieved);
-                std::mem::drop(connection);
-
-                let mut state = poll_thread_controller_state
-                    .lock()
-                    .expect("Poisoned controller state Mutex.");
-
-                state.state.alarm_enabled = !state.state.alarm_enabled;
-
-                if !state.keep_alive {
-                    break;
+                let mut selected = None;
+                for p in ports {
+                    if ui
+                        .button(p.port_name.as_str())
+                        .clicked()
+                    {
+                        selected = Some(p.port_name);
+                    }
                 }
 
-                std::mem::drop(state);
-                thread::sleep(Duration::from_millis(1000));
-            }
+                if let Some(selected) = selected {
+                    println!("Connecting to port: {}", selected);
+                    match SerialConnection::new(selected.as_str()) {
+                        Ok(connection) => {
+                            self.api.active_connection = Some(connection);
+                        }
 
-            println!("Ending poll thread.");
-        });
+                        Err(err) => {
+                            return ui.colored_label(
+                                Color32::RED,
+                                format!("Failed to connect to port: {}", err),
+                            );
+                        }
+                    }
+                }
 
-        return Ok(Self {
-            port: connection,
-            poll_thread_context: controller_state,
-        });
+                ui.response()
+            })
+            .header_response
     }
 }

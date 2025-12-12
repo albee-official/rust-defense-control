@@ -1,8 +1,7 @@
 use std::{cell::Cell, rc::Rc};
 
+use crate::authorized::api::Api;
 use chrono::{DateTime, TimeDelta, Utc};
-
-use crate::authorized::api::ControllerPoller;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub enum AuthLevel {
@@ -14,7 +13,7 @@ pub enum AuthLevel {
 #[derive(Debug)]
 pub struct AppState {
     pub input_username: String,
-    pub api: ControllerPoller,
+    pub api: Api,
     pub input_password: String,
     pub enable_editing: Rc<Cell<bool>>,
     pub current_session: Option<SessionData>,
@@ -48,10 +47,10 @@ pub struct SessionData {
 
 impl<T: Default> ControlledValue<T> {
     pub fn from(edit_ref: &Rc<Cell<bool>>) -> Self {
-        return Self {
+        Self {
             enable_editing: edit_ref.clone(),
             value: Default::default(),
-        };
+        }
     }
 
     pub fn edit_value(&'_ mut self) -> ValueRef<'_, T> {
