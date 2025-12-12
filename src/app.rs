@@ -6,16 +6,19 @@ use crate::{
 use chrono::{TimeDelta, Utc};
 use eframe::egui::PopupCloseBehavior::CloseOnClickOutside;
 use eframe::egui::{self};
+use egui_notify::Toasts;
 
-pub fn render(data: &mut AppState, ui: &mut egui::Ui) {
+pub fn render(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
     ui.heading("Анти-(Анти-Автомат) System");
-    
+
     let response = ui.button("Auth");
-    
+
     egui::Popup::menu(&response)
         .close_behavior(CloseOnClickOutside)
         .width(220.0)
         .show(|ui| {
+            ui.ctx().request_repaint();
+
             if let Some(session) = data.current_session.as_mut() {
                 render_session(session, ui);
 
@@ -23,30 +26,32 @@ pub fn render(data: &mut AppState, ui: &mut egui::Ui) {
                     data.current_session = None;
                     data.enable_editing
                         .set(data.current_session.is_some());
+
+                    toasts.warning("Logged out");
                 }
             } else {
-                render_login(data, ui);
+                render_login(data, toasts, ui);
             }
         });
 
-    render_data(data, ui);
+    render_data(data, toasts, ui);
 }
 
-fn render_data(data: &mut AppState, ui: &mut egui::Ui) {
+fn render_data(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
     ui.group(|ui| {
         ui.label("General:");
 
         if data.current_session.is_some() {
             if ui.button("Poll").clicked() {
-                data.api.send_poll();
+                data.api.send_poll(toasts);
             }
 
             if ui.button("Reset").clicked() {
-                data.api.send_reset();
+                data.api.send_reset(toasts);
             }
 
             if ui.button("Alarm!!!!!!").clicked() {
-                data.api.send_activate_alarm();
+                data.api.send_activate_alarm(toasts);
             }
         }
 
@@ -57,7 +62,7 @@ fn render_data(data: &mut AppState, ui: &mut egui::Ui) {
     });
 }
 
-fn render_login(data: &mut AppState, ui: &mut egui::Ui) {
+fn render_login(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
     let username = data.input_username.clone();
     ui.label(format!("Will login as [{username}]"));
 
@@ -92,8 +97,15 @@ fn render_login(data: &mut AppState, ui: &mut egui::Ui) {
                 },
             });
 
+            toasts.info(format!(
+                "Logged in as {}",
+                data.input_username
+            ));
+
             data.enable_editing
                 .set(data.current_session.is_some());
+        } else {
+            toasts.error("Invalid credentials");
         }
     }
 }
