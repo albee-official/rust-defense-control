@@ -1,53 +1,22 @@
 # Control
 
-**⚠️ In Development**  
-This project is actively being worked on and is not yet considered stable or production‑ready.
-
-Control is a Windows desktop application written in Rust that interfaces with a defense system over USB.  
-The project was developed as part of a university group assignment and demonstrates user authentication,
-real‑time sensor monitoring, and command transmission to the hardware.
+Control is a Windows desktop application written in Rust that communicates with a defense system over USB.
+The project was completed as part of a university group assignment and is now read‑only; no further development will be
+performed.
 
 ## Features
 
-- **USB communication** – Uses `serialport` for low‑level serial I/O.
-- **GUI** – Built with `eframe/egui`, featuring custom widgets for boolean controls and indicators.
-- **Authentication** – Simple username/password check with role based access (`View` / `Modify`).  
-  *Bob* can modify, *god* has extended privileges.
+- **USB communication** – Uses the `serialport` crate for low‑level serial I/O. Allows changing connected device at
+  runtime.
+- **GUI** – Built with `eframe/egui`, featuring custom widgets for boolean controls and status indicators.
+- **Authentication** – Simple username/password check with role‑based access (`View` / `Modify`).
 - **Session timeout** – Sessions expire automatically after a configurable period.
 
-## Building
+## Project structure
 
-```bash
-# Clone the repo (already on your machine)
-cd control
-
-# Build in release mode
-cargo build --release
 ```
-
-The binary will be available under `target/release/control.exe`.
-
-## Running
-
-```bash
-./target/release/control.exe
-```
-
-Once launched, log in using one of the following credentials:
-
-| Username | Password |
-|----------|----------|
-| Bob      | 123      |
-| god      | 123      |
-
-After logging in you can toggle the alarm state and view battery status.
-
-## Project Structure
-
-```text
-control/
-├── assets/          # Font files for UI
-├── embed/           # (unused, placeholder)
+/
+├── assets/           # Font files for UI
 ├── src/
 │   ├── authorized/   # API wrappers
 │   ├── fluent/       # Fluent UI helpers
@@ -57,25 +26,48 @@ control/
 │   ├── data.rs       # Shared state structs
 │   └── main.rs       # Application entry point
 ├── Cargo.toml
-└── README.md         # This file
+└── README.md
 ```
+
+## Building
+
+From the project root run:
+
+```bash
+cargo build --release
+```
+
+The executable will be located at `target/release/control.exe`.
+
+## Running
+
+After building, start the application with:
+
+```bash
+./target/release/control.exe
+```
+
+Once launched, log in using one of the following credentials:
+
+| Username | Password                      |
+|----------|-------------------------------|
+| Sigma    | zZz_amogus_sussy_baka1337_zZz |
+
+You can toggle the alarm state and view battery status.
 
 ## Dependencies
 
-| Crate | Purpose |
-|-------|---------|
-| `eframe` & `egui` | GUI framework |
-| `serialport` | USB serial communication |
-| `chrono` | Time handling for sessions |
-| `tokio` | Async runtime (future‑proofing) |
+The project relies on the following crates:
 
-All dependencies are specified in `Cargo.toml`.
+- `eframe` & `egui` – GUI framework
+- `serialport-rs` – USB serial communication
+- `chrono` – Time handling for sessions
+- `anyhow` – Unified result type
 
-## Contributing
+All dependencies are listed in `Cargo.toml`.
 
-Feel free to open issues or pull requests.  
-Keep changes small, well‑documented, and ensure the tests pass (if added).
+## Status
 
---- 
+This repository is now read‑only. The project has been finished and will not receive further updates.
 
-© 2024 University Project – All rights reserved.
+---
