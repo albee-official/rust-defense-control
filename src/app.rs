@@ -3,7 +3,7 @@ use crate::{
     data::{AppState, AuthLevel, SessionData},
     widgets::boolean_indicator::BooleanIndicator,
 };
-use chrono::{TimeDelta, Utc};
+use chrono::{Duration, TimeDelta, Utc};
 use eframe::egui::PopupCloseBehavior::CloseOnClickOutside;
 use eframe::egui::{self};
 use egui_notify::Toasts;
@@ -11,9 +11,7 @@ use egui_notify::Toasts;
 pub fn render(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
     ui.heading("Анти-(Анти-Автомат) System");
 
-    let response = ui.button("Auth");
-
-    egui::Popup::menu(&response)
+    egui::Popup::menu(&ui.button("Auth"))
         .close_behavior(CloseOnClickOutside)
         .width(220.0)
         .show(|ui| {
@@ -24,8 +22,6 @@ pub fn render(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
 
                 if session.auth_level == AuthLevel::View {
                     data.current_session = None;
-                    data.enable_editing
-                        .set(data.current_session.is_some());
 
                     toasts.warning("Logged out");
                 }
@@ -38,26 +34,121 @@ pub fn render(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
 }
 
 fn render_data(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
-    ui.group(|ui| {
-        ui.label("General:");
-
-        if data.current_session.is_some() {
+    if data.current_session.is_some() {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.label("General:");
             if ui.button("Poll").clicked() {
-                data.api.send_poll(toasts);
+                let _ = data.api.send_poll().inspect_err(|err| {
+                    toasts.error(format!("{:?}", err));
+                });
             }
 
             if ui.button("Reset").clicked() {
-                data.api.send_reset(toasts);
+                let _ = data
+                    .api
+                    .send_reset()
+                    .inspect_err(|err| {
+                        toasts.error(format!("{:?}", err));
+                    });
             }
 
             if ui.button("Alarm!!!!!!").clicked() {
-                data.api.send_activate_alarm(toasts);
+                data.alarm_end_time = Some(Utc::now() + Duration::minutes(5));
+                data.api.send_lock_back_door();
+                data.api.send_lock_front_door();
             }
-        }
+
+            ui.horizontal(|ui| {
+                ui.label("Back: ");
+
+                if ui.button("Lock").clicked() {
+                    let _ = data
+                        .api
+                        .send_lock_back_door()
+                        .inspect_err(|err| {
+                            toasts.error(format!("{:?}", err));
+                        });
+                }
+
+                if ui.button("Unlock").clicked() {
+                    let _ = data
+                        .api
+                        .send_unlock_back_door()
+                        .inspect_err(|err| {
+                            toasts.error(format!("{:?}", err));
+                        });
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Front: ");
+
+                if ui.button("Lock").clicked() {
+                    let _ = data
+                        .api
+                        .send_lock_front_door()
+                        .inspect_err(|err| {
+                            toasts.error(format!("{:?}", err));
+                        });
+                }
+
+                if ui.button("Unlock").clicked() {
+                    let _ = data
+                        .api
+                        .send_unlock_front_door()
+                        .inspect_err(|err| {
+                            toasts.error(format!("{:?}", err));
+                        });
+                }
+            });
+        });
+    }
+
+    ui.group(|ui| {
+        ui.label("Двери");
 
         ui.add(BooleanIndicator {
-            label: "Is On Battery:".to_owned(),
-            value_ref: &data.sensor_data.is_on_battery,
+            label: "Передняя дверь:".to_owned(),
+            value_ref: &data.last_poll_result.open_door_front,
+        });
+
+        ui.add(BooleanIndicator {
+            label: "Задняя дверь:".to_owned(),
+            value_ref: &data.last_poll_result.open_door_back,
+        });
+    });
+
+    ui.group(|ui| {
+        ui.label("Датчики движения");
+
+        ui.add(BooleanIndicator {
+            label: "Датчик движения 1:".to_owned(),
+            value_ref: &data.last_poll_result.motion_detected_1,
+        });
+
+        ui.add(BooleanIndicator {
+            label: "Датчик движения 2:".to_owned(),
+            value_ref: &data.last_poll_result.motion_detected_2,
+        });
+    });
+
+    ui.group(|ui| {
+        ui.label("Остальное");
+
+        ui.add(BooleanIndicator {
+            label: "Неправильная RFID карточка:".to_owned(),
+            value_ref: &data.last_poll_result.door_invade,
+        });
+
+        ui.add(BooleanIndicator {
+            label: "Акселерометр:".to_owned(),
+            value_ref: &data.last_poll_result.accelerometer,
+        });
+
+        ui.add(BooleanIndicator {
+            label: "Пожар:".to_owned(),
+            value_ref: &data.last_poll_result.fire_detected,
         });
     });
 }
@@ -101,9 +192,6 @@ fn render_login(data: &mut AppState, toasts: &mut Toasts, ui: &mut egui::Ui) {
                 "Logged in as {}",
                 data.input_username
             ));
-
-            data.enable_editing
-                .set(data.current_session.is_some());
         } else {
             toasts.error("Invalid credentials");
         }

@@ -1,3 +1,4 @@
+use crate::fluent::bit_inspect::BitInspect;
 use crate::fluent::containers::Innable;
 use eframe::egui::{Color32, Response, Ui, Widget};
 use serialport::SerialPort;
@@ -11,13 +12,19 @@ pub struct SerialConnection {
 
 #[derive(Debug)]
 pub struct PollResult {
-    pub led_alive: bool,
+    pub open_door_front: bool,
+    pub motion_detected_1: bool,
+    pub motion_detected_2: bool,
+    pub accelerometer: bool,
+    pub fire_detected: bool,
+    pub door_invade: bool,
+    pub open_door_back: bool,
 }
 
 impl SerialConnection {
     pub fn new(port_name: &str) -> anyhow::Result<Self> {
         let opened = serialport::new(port_name, 9600)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(3))
             .open()?;
 
         Ok(Self { port: opened.in_mutex().in_arc() })
@@ -29,15 +36,23 @@ impl SerialConnection {
             .lock()
             .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
 
-        println!("Sending poll");
+        println!("Sending: 0xAA");
         guard.write(&[0xAA])?;
 
-        let mut response = [0u8; 2];
+        let mut response = [0u8; 1];
         guard.read_exact(&mut response)?;
 
         println!("Received response: {:?}", response);
 
-        Ok(PollResult { led_alive: true })
+        Ok(PollResult {
+            open_door_front: response[0].is_bit_set(1),
+            motion_detected_1: response[0].is_bit_set(6),
+            motion_detected_2: response[0].is_bit_set(5),
+            accelerometer: response[0].is_bit_set(4),
+            fire_detected: response[0].is_bit_set(3),
+            door_invade: response[0].is_bit_set(2),
+            open_door_back: response[0].is_bit_set(7),
+        })
     }
 
     pub fn send_reset(&self) -> anyhow::Result<()> {
@@ -46,17 +61,87 @@ impl SerialConnection {
             .lock()
             .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
 
+        println!("Sending: 0x55");
+
         guard.write(&[0x55])?;
+
+        let mut response = [0u8; 1];
+        guard.read_exact(&mut response)?;
+
+        println!("Received response: {:?}", response);
+
         Ok(())
     }
 
-    pub fn send_activate_alarm(&self) -> anyhow::Result<()> {
+    pub fn send_unlock_back_door(&self) -> anyhow::Result<()> {
         let mut guard = self
             .port
             .lock()
             .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
 
+        println!("Sending: 0xA3");
+
+        guard.write(&[0xA3])?;
+
+        let mut response = [0u8; 1];
+        guard.read_exact(&mut response)?;
+
+        println!("Received response: {:?}", response);
+
+        Ok(())
+    }
+
+    pub fn send_lock_back_door(&self) -> anyhow::Result<()> {
+        let mut guard = self
+            .port
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
+
+        println!("Sending: 0xA2");
+
+        guard.write(&[0xA2])?;
+
+        let mut response = [0u8; 1];
+        guard.read_exact(&mut response)?;
+
+        println!("Received response: {:?}", response);
+
+        Ok(())
+    }
+
+    pub fn send_lock_front_door(&self) -> anyhow::Result<()> {
+        let mut guard = self
+            .port
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
+
+        println!("Sending: 0xA4");
+
+        guard.write(&[0xA4])?;
+
+        let mut response = [0u8; 1];
+        guard.read_exact(&mut response)?;
+
+        println!("Received response: {:?}", response);
+
+        Ok(())
+    }
+
+    pub fn send_unlock_front_door(&self) -> anyhow::Result<()> {
+        let mut guard = self
+            .port
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Poisoned mutex"))?;
+
+        println!("Sending: 0xA5");
+
         guard.write(&[0xA5])?;
+
+        let mut response = [0u8; 1];
+        guard.read_exact(&mut response)?;
+
+        println!("Received response: {:?}", response);
+
         Ok(())
     }
 

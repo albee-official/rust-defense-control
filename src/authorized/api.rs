@@ -1,6 +1,5 @@
-﻿use crate::authorized::serial_connection::SerialConnection;
+use crate::authorized::serial_connection::{PollResult, SerialConnection};
 use eframe::egui::{Color32, Response, Ui, Widget};
-use egui_notify::Toasts;
 
 #[derive(Debug)]
 pub struct Api {
@@ -8,61 +7,80 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn exists(&self) -> bool {
-        self.active_connection.is_some()
-    }
-}
-
-impl Api {
-    pub fn send_poll(&self, toasts: &mut Toasts) {
-        if let Some(active_connection) = &self.active_connection {
-            match active_connection.send_poll() {
-                Ok(res) => {
-                    println!("Res: {res:?}");
-                }
-                Err(e) => {
-                    toasts.error(format!("Failed to poll: {}", e));
-                    eprintln!("{}", e);
-                }
-            }
-        }
-    }
-
-    pub fn send_reset(&self, toasts: &mut Toasts) {
-        if let Some(active_connection) = &self.active_connection {
-            match active_connection.send_reset() {
-                Ok(_) => (),
-                Err(e) => {
-                    toasts.error(format!("Failed to send reset: {}", e));
-                    eprintln!("{}", e);
-                }
-            }
-        }
-    }
-
-    pub fn send_activate_alarm(&self, toasts: &mut Toasts) {
-        if let Some(active_connection) = &self.active_connection {
-            match active_connection.send_activate_alarm() {
-                Ok(_) => (),
-                Err(e) => {
-                    toasts.error(format!(
-                        "Failed to send activate alarm: {}",
-                        e
-                    ));
-                    eprintln!("{}", e);
-                }
-            }
-        }
-    }
-}
-
-impl Api {
     pub fn new() -> Self {
         Self { active_connection: None }
     }
 
-    pub fn widget(&mut self) -> impl Widget {
+    pub fn widget(&mut self) -> impl Widget + '_ {
         ApiWidget { api: self }
+    }
+
+    pub fn close_connection(&mut self) {
+        self.active_connection = None;
+    }
+}
+
+impl Api {
+    pub fn exists(&self) -> bool {
+        self.active_connection.is_some()
+    }
+
+    pub fn send_poll(&self) -> anyhow::Result<PollResult> {
+        match &self.active_connection {
+            Some(active_connection) => active_connection.send_poll(),
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
+    }
+
+    pub fn send_reset(&self) -> anyhow::Result<()> {
+        match &self.active_connection {
+            Some(active_connection) => active_connection.send_reset(),
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
+    }
+
+    pub fn send_unlock_back_door(&self) -> anyhow::Result<()> {
+        match &self.active_connection {
+            Some(active_connection) => {
+                active_connection.send_unlock_back_door()
+            }
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
+    }
+
+    pub fn send_lock_back_door(&self) -> anyhow::Result<()> {
+        match &self.active_connection {
+            Some(active_connection) => active_connection.send_lock_back_door(),
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
+    }
+
+    pub fn send_unlock_front_door(&self) -> anyhow::Result<()> {
+        match &self.active_connection {
+            Some(active_connection) => {
+                active_connection.send_unlock_front_door()
+            }
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
+    }
+
+    pub fn send_lock_front_door(&self) -> anyhow::Result<()> {
+        match &self.active_connection {
+            Some(active_connection) => active_connection.send_lock_front_door(),
+            None => {
+                anyhow::bail!("No active connection");
+            }
+        }
     }
 }
 
@@ -82,6 +100,7 @@ impl Widget for ApiWidget<'_> {
         };
 
         ui.add(connection.widget());
+
         if ui.button("Disconnect").clicked() {
             self.api.active_connection = None;
         }
@@ -122,6 +141,7 @@ impl ApiWidget<'_> {
                 }
 
                 Err(err) => {
+                    eprintln!("Failed to connect to port: {}", err);
                     return ui.colored_label(
                         Color32::RED,
                         format!("Failed to connect to port: {}", err),

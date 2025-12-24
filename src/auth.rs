@@ -1,3 +1,3 @@
 pub fn is_valid(username: &str, password: &str) -> bool {
-    return username == "Bob" && password == "123" || username == "god" && password == "123";
+    username == "Sigma" && password == "zZz_amogus_sussy_baka1337_zZz"
 }
